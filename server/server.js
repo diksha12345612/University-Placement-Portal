@@ -40,13 +40,26 @@ app.use(helmet());
 
 // CLIENT_URL can hold several sites separated by commas,
 // e.g. "https://myapp.vercel.app,http://localhost:5173"
-// A URL never contains spaces or quotes, so any that were pasted in by mistake are removed,
-// along with a trailing "/". Browsers send the origin in lowercase, so we compare in lowercase.
-const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173')
+// Text copied from web pages can carry look-alike characters (a "‑" that is not a normal "-",
+// invisible soft hyphens, spaces, quotes). They make the URL look right but never match, so we turn
+// look-alike dashes into "-" and keep only the characters an origin can really contain.
+const rawClientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+const strangeChars = [...rawClientUrl].filter((ch) => ch.charCodeAt(0) > 126);
+if (strangeChars.length > 0) {
+  const codes = strangeChars.map((ch) => `U+${ch.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0')}`);
+  console.warn(`CLIENT_URL contained unusual characters that were cleaned up: ${codes.join(', ')}`);
+}
+const allowedOrigins = rawClientUrl
   .split(',')
-  .map((url) => url.replace(/[\s"']/g, '').replace(/\/+$/, '').toLowerCase())
+  .map((url) =>
+    url
+      .replace(/[‐-―−]/g, '-') // look-alike dashes -> normal hyphen
+      .replace(/[^a-zA-Z0-9:/.\-_]/g, '') // drop everything an origin cannot contain
+      .replace(/\/+$/, '') // no trailing slash
+      .toLowerCase()
+  )
   .filter(Boolean);
-// Printed once at startup (JSON shows hidden characters), so a CORS problem is easy to spot in the logs
+// Printed once at startup, so a CORS problem is easy to spot in the logs
 console.log(`CORS allowed origins: ${JSON.stringify(allowedOrigins)}`);
 
 app.use(
