@@ -11,7 +11,36 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+// Brevo's HTTP API. Used on Render, because Render's free plan blocks the SMTP ports Gmail needs.
+const sendWithBrevo = async ({ to, subject, text, html }) => {
+  const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'api-key': process.env.BREVO_API_KEY,
+      'Content-Type': 'application/json',
+      accept: 'application/json',
+    },
+    body: JSON.stringify({
+      sender: { name: process.env.EMAIL_FROM_NAME || 'Placement Portal', email: process.env.EMAIL_FROM },
+      to: [{ email: to }],
+      subject,
+      textContent: text,
+      htmlContent: html,
+    }),
+    signal: AbortSignal.timeout(15000),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Brevo error ${response.status}: ${(await response.text()).slice(0, 200)}`);
+  }
+};
+
 const sendEmail = async ({ to, subject, text, html }) => {
+  // On Render: Brevo (BREVO_API_KEY and EMAIL_FROM are set there). Locally: Gmail below.
+  if (process.env.BREVO_API_KEY && process.env.EMAIL_FROM) {
+    return sendWithBrevo({ to, subject, text, html });
+  }
+
   // In development without Gmail settings, print the email in the terminal so you can still test.
   if (!isEmailConfigured()) {
     if (process.env.NODE_ENV === 'production') {
