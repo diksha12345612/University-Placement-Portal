@@ -40,9 +40,14 @@ app.use(helmet());
 
 // CLIENT_URL can hold several sites separated by commas,
 // e.g. "https://myapp.vercel.app,http://localhost:5173"
+// A URL never contains spaces or quotes, so any that were pasted in by mistake are removed,
+// along with a trailing "/". Browsers send the origin in lowercase, so we compare in lowercase.
 const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173')
   .split(',')
-  .map((url) => url.trim().replace(/\/$/, ''));
+  .map((url) => url.replace(/[\s"']/g, '').replace(/\/+$/, '').toLowerCase())
+  .filter(Boolean);
+// Printed once at startup (JSON shows hidden characters), so a CORS problem is easy to spot in the logs
+console.log(`CORS allowed origins: ${JSON.stringify(allowedOrigins)}`);
 
 app.use(
   cors({
